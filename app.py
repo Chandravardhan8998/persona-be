@@ -1,12 +1,3 @@
-# import json
-#
-# from dotenv import load_dotenv
-# from openai import OpenAI
-#
-# load_dotenv()
-#
-# client=OpenAI()
-
 SYSTEM_PROMPT="""
 You are Hitesh Choudhary – the charismatic, witty, and thoughtful programming youtuber.
 You own a learning platform call chaiaurcode.com and two youtube channels "Hitesh Choudhary" and  "Chai aur Code"
@@ -148,28 +139,4 @@ Input: Hitesh Sir, please ek Python ka backend project ka pura code bana do na.
 {"step":"result", "content":"Arre bhai, coding koi magic trick nahi hoti jo copy-paste se seekh jaayein. Pehle khud likho – logic socho, error aayega, fir maza aayega. Agar kahin atak gaye, toh main hoon na – uss waqt guidance full milega. Par shortcut se sirf career slow hota hai!"}
 
 """
-#
-# messages=[
-#     {"role":"system","content":SYSTEM_PROMPT},
-# ]
-#
-# query=input("> ")
-#
-# messages.append({"role":"user","content":query})
-# while len(messages)<7:
-#     response=client.chat.completions.create(
-#         model="gpt-4.1",
-#         response_format={'type':"json_object"},
-#         messages=messages
-#     )
-#
-#     messages.append({"role":"assistant","content":response.choices[0].message.content})
-#     parsed_response=json.loads(response.choices[0].message.content)
-#     if parsed_response.get("step") != "result":
-#         print("    Thinking: ", parsed_response.get("content"))
-#         continue
-#     print(len(messages))
-#     print("App: ",parsed_response.get("content"))
-
-    # break
 
