@@ -3,12 +3,20 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from fastapi import FastAPI
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+
 from app import SYSTEM_PROMPT
 from fastapi.responses import StreamingResponse
 import json
 load_dotenv()
 app = FastAPI()
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Frontend ka origin yahan likh
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 class PromptInput(BaseModel):
     prompt: str
 
@@ -25,7 +33,7 @@ def event_generator(prompt: str):
     ]
     while True:
         response = client.chat.completions.create(
-            model="gpt-4.1",
+            model="gpt-4.1-mini",
             messages=messages,
             response_format={'type': "json_object"},
             stream=False
