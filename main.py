@@ -12,7 +12,7 @@ load_dotenv()
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://cv-persona.vercel.app/"],  # Frontend ka origin yahan likh
+    allow_origins=["https://cv-persona.vercel.app"],  # Frontend ka origin yahan likh
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
