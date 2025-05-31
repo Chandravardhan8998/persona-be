@@ -1,16 +1,19 @@
 
 from dotenv import load_dotenv
-from openai import OpenAI
-from fastapi import FastAPI
-from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-import os
-from app import SYSTEM_PROMPT, CODE_AGENT_SYSTEM_PROMPT
+
+from agent_controller import code_generator
+from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
-import json
+import redis.asyncio as redis
+import os
+
+from models import PromptInput
 
 load_dotenv()
 app = FastAPI()
+r = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000","https://cv-persona.vercel.app"],
@@ -18,24 +21,54 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-class PromptInput(BaseModel):
-    prompt: str
-
-def run_command(cmd: str):
-    result = os.system(cmd)
-    return result
 
 @app.post("/generate-code")
-async def generate_code(query:PromptInput):
-        prompt=query.prompt
-        return StreamingResponse(code_generator(prompt), media_type="text/event-stream")
+async def generate_code(body:PromptInput):
+    stream = code_generator(body.prompt, body.session_id)
+    return StreamingResponse(stream, media_type="text/event-stream")
 
-def code_generator(prompt:str):
-    client=OpenAI()
-    messages=[
-        {"role":"system","content":CODE_AGENT_SYSTEM_PROMPT},
-        {"role":"user","content":prompt}
-    ]
+# async def code_generator(prompt: str, session_id: str):
+#     session_key = f"chat:{session_id}"
+#     prev_msgs = await r.get(session_key)
+#     messages = json.loads(prev_msgs) if prev_msgs else []
+#
+#     if not prev_msgs:
+#         messages.append({"role": "system", "content": CODE_AGENT_SYSTEM_PROMPT})
+#
+#     client = OpenAI()
+#     messages.append({"role": "user", "content": prompt})
+#
+#     while True:
+#         response = client.chat.completions.create(
+#             model="gpt-4.1-mini",
+#             messages=messages,
+#             response_format={'type': "json_object"}
+#         )
+#
+#         content = response.choices[0].message.content
+#         messages.append({"role": "assistant", "content": content})
+#
+#         parsed_response = json.loads(content)
+#
+#         if parsed_response.get("step") == "action":
+#             tool_name = parsed_response.get("function")
+#             tool_input = parsed_response.get("input")
+#
+#             if available_tools.get(tool_name):
+#                 output = available_tools[tool_name](tool_input)
+#                 messages.append({
+#                     "role": "user",
+#                     "content": json.dumps({"step": "observe", "output": output})
+#                 })
+#                 yield f"data: {json.dumps(parsed_response)}\n\n"
+#                 continue
+#
+#         if parsed_response.get("step") == "output":
+#             yield f"data: {json.dumps(parsed_response)}\n\n"
+#             break
+#
+#     # ✅ Store updated messages back to Redis
+#     await r.set(session_key, json.dumps(messages), ex=36000)
 
 
 # @app.post("/generate")
@@ -64,3 +97,26 @@ def code_generator(prompt:str):
 #
 #         if parsed_response.get("step") == "result":
 #             break
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
