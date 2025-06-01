@@ -18,3 +18,10 @@ class GenerateCMD:
         self.content = content
         self.session_id=session_id
         self.command_type = command_type
+
+
+class DeleteFileRequest(BaseModel):
+    session_id: str
+    filepath: str  # full relative path of the file (e.g. "user_sessions/[session_id]/filename.tsx")
+
+SESSION_BASE_DIR = "user_sessions"

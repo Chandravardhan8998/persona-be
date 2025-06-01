@@ -1,7 +1,6 @@
 import os
-import subprocess
 
-from models import GenerateCMD, CommandType
+from models import GenerateCMD, CommandType, SESSION_BASE_DIR
 
 
 def run_command(cmd: str):
@@ -14,8 +13,8 @@ def generate_cmd(input_data: GenerateCMD) -> str:
     directory = os.path.dirname(filename)
     if input_data.command_type==CommandType.CREATE :
         content = input_data.content.replace("'", "'\"'\"'")  # escape single quotes safely
-        print(f"mkdir -p {input_data.session_id}/{directory} && echo '{content}' > {filename}")
-        return f"mkdir -p {input_data.session_id}/{directory} && echo '{content}' > {input_data.session_id}/{filename}"
+        path=f"{SESSION_BASE_DIR}/{input_data.session_id}"
+        return f"mkdir -p {path}/{directory} && echo '{content}' > {path}/{filename}"
 
     elif input_data.command_type==CommandType.REMOVE :
         return input_data.content
