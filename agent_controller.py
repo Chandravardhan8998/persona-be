@@ -22,10 +22,6 @@ def cleanup_session(session_id: str):
 
 
 async def code_generator(prompt: str, session_id: str):
-    try:
-        r.ping()
-    except redis.exceptions.ConnectionError:
-        print("redis error")
     session_key = f"chat:{session_id}"
     print("working on redis")
     prev_msgs = await r.get(session_key)
