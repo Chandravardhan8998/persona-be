@@ -3,11 +3,12 @@ from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 
 from agent_controller import code_generator
-from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 import redis.asyncio as redis
 import os
-
+from pathlib import Path
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from models import PromptInput
 
 load_dotenv()
@@ -16,16 +17,34 @@ r = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","https://cv-persona.vercel.app"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+@app.get("/session/{session_id}/files")
+async def list_session_files(session_id: str):
+    session_path = Path(f"./{session_id}")  # Path to the session folder
+
+    if not session_path.exists() or not session_path.is_dir():
+        raise HTTPException(status_code=404, detail="Session folder not found")
+
+    # Recursively list all files
+    files = [
+        str(p.relative_to(session_path))
+        for p in session_path.rglob("*")
+        if p.is_file()
+    ]
+
+    return JSONResponse(content={"session_id": session_id, "files": files})
+
 @app.post("/generate-code")
 async def generate_code(body:PromptInput):
     stream = code_generator(body.prompt, body.session_id)
-    return StreamingResponse(stream, media_type="text/event-stream")
+    return (StreamingResponse(stream, media_type="text/event-stream"))
+
+
 
 # async def code_generator(prompt: str, session_id: str):
 #     session_key = f"chat:{session_id}"
