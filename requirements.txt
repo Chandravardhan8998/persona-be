@@ -5,3 +5,5 @@ python-dotenv
 dotenv
 pydantic
 redis
+subprocess
+asyncio
