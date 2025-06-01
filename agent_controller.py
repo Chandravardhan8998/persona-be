@@ -84,26 +84,29 @@ async def code_generator(prompt: str, session_id: str):
                                 "content": tool_input["content"]
                             })
                         })
-                        yield f"data: {json.dumps({
-                            "step": "generate",
-                            "content": tool_input["content"],
-                            "filename": tool_input["filename"]
-                        })}\n\n"
+                        data={
+                            'step': 'generate',
+                            'content': tool_input['content'],
+                            'filename': tool_input['filename']
+                        }
+                        yield f"data: {json.dumps(data)}\n\n"
                         await asyncio.sleep(0.01)
 
                     elif tool_input["type"] == "REMOVE":
-                        yield f"data: {json.dumps({
-                            "step": "generate",
-                            "content": tool_input["content"],
-                            "filename": "N/A"
-                        })}\n\n"
+                        data={
+                            'step': 'generate',
+                            'content': tool_input['content'],
+                            'filename': 'N/A'
+                        }
+                        yield f"data: {json.dumps(data)}\n\n"
                         await asyncio.sleep(0.01)
                 else:
-                    yield f"data: {json.dumps({
-                        "step": "generate",
-                        "content": tool_input["content"],
-                        "filename": tool_input.get("filename", "N/A")
-                    })}\n\n"
+                    data={
+                        'step': 'generate',
+                        'content': tool_input['content'],
+                        'filename': tool_input.get('filename', 'N/A')
+                    }
+                    yield f"data: {json.dumps(data)}\n\n"
                     await asyncio.sleep(0.01)
 
                 await r.set(session_key, json.dumps(messages))
@@ -113,7 +116,11 @@ async def code_generator(prompt: str, session_id: str):
                 break
         except Exception as e:
             print(e)
-            yield f"data: {json.dumps({'step': 'review', 'content': "Something went wrong with the LLM, most likely: \"Paisa khatam\"."})}\n\n"
+            error_data = {
+                "step": "review",
+                "content": 'Something went wrong with the LLM, most likely: "Paisa khatam".'
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
             await asyncio.sleep(0.01)
             break
 
