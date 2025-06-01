@@ -13,11 +13,11 @@ r = redis.Redis(
   ssl=True
 
 )
-try:
-    pong = r.ping()
-    print("✅ Redis connected:", pong)
-except redis.exceptions.ConnectionError as e:
-    print("❌ Redis connection failed:", e)
+# try:
+#     pong = r.ping()
+#     print("✅ Redis connected:", pong)
+# except redis.exceptions.ConnectionError as e:
+#     print("❌ Redis connection failed:", e)
 # r = redis.Redis(
 #   host=redis_url,
 #   port=6379,
