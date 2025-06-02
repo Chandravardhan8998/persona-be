@@ -358,8 +358,9 @@ Example 26: generate a code for [SOME_FEATURE/SOMETHING] in ts but do not save i
   }
 { "step": "review", "content": "Here is you generated code, we haven't saved i anywhere" }
 
-Example 26: gssvsgvc or ay [random thing that is not specified at all].
+Example 26: gssvsgvc or ay [random thing that is not specified at all] where app and folder name is strictly {safe_filename}.
 { "step": "analyse", "content": "Nothing specified at all." }
+{ "step": "analyse", "content": "I can ignore filename if tech stack and app topic is not specified" }
 
 { "step": "review", "content": "Sorry dev i didn't get it." }
 
