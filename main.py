@@ -134,6 +134,7 @@ async def test_code_generate():
 
 @app.post("/generate-code")
 async def generate_code(body:PromptInput):
+    print("here")
     stream = code_generator(body.prompt, body.session_id)
     return StreamingResponse(stream, media_type="text/event-stream")
 

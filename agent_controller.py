@@ -18,13 +18,21 @@ client = OpenAI()
 def cleanup_session(session_id: str):
     folder_path = f"{SESSION_BASE_DIR}/{session_id}"
     subprocess.getoutput(f"rm -rf {folder_path}")  # Dangerous! Use with checks
-    r.delete(f"chat:{session_id}")
+    try:
+        r.delete(f"chat:{session_id}")
+    except redis.exceptions.ConnectionError as e:
+        print("❌ Redis connection failed:", e)
 
 
 async def code_generator(prompt: str, session_id: str):
+    print("here")
     session_key = f"chat:{session_id}"
     print("working on redis")
-    prev_msgs = await r.get(session_key)
+    prev_msgs=""
+    try:
+        prev_msgs = await r.get(session_key)
+    except redis.exceptions.ConnectionError as e:
+        print("❌ Redis connection failed:", e)
     print("working on redis done")
     messages = json.loads(prev_msgs) if prev_msgs else []
 
@@ -45,8 +53,11 @@ async def code_generator(prompt: str, session_id: str):
             msg = response.choices[0].message.content
             messages.append({"role": "assistant", "content": msg})
             print("saving to session")
-            await r.set(session_key, json.dumps(messages))  # Store latest state
-
+            try:
+                await r.set(session_key, json.dumps(messages),ex=3600)
+                # Store latest state
+            except redis.exceptions.ConnectionError as e:
+                print("❌ Redis connection failed:", e)
             parsed = json.loads(msg)
             step = parsed.get("step")
             print("BEFORE STEP LOG")
@@ -104,8 +115,10 @@ async def code_generator(prompt: str, session_id: str):
                     }
                     yield f"data: {json.dumps(data)}\n\n"
                     await asyncio.sleep(0.01)
-
-                await r.set(session_key, json.dumps(messages))
+                try:
+                    await r.set(session_key, json.dumps(messages),ex=3600)
+                except redis.exceptions.ConnectionError as e:
+                    print("❌ Redis connection failed:", e)
 
             # Break if review step found
             if step == "review":
