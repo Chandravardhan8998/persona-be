@@ -1,5 +1,6 @@
 import asyncio
 import json
+from typing import List
 
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,59 +20,109 @@ r = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000","http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+
 )
 
 
+@app.get("/session/{session_id}/project/{project_name}/files")
+async def get_project_files(session_id: str, project_name: str):
+    project_path = Path(f"./{SESSION_BASE_DIR}/{session_id}/{project_name}")
 
-@app.get("/session/{session_id}/files")
-async def list_session_files(session_id: str):
-    session_path = Path(f"./{SESSION_BASE_DIR}/{session_id}")  # Path to the session folder
+    if not project_path.exists() or not project_path.is_dir():
+        raise HTTPException(status_code=404, detail="Project folder not found")
 
+    # Collect all filepaths (relative to project folder), no file content
+    files: List[str] = []
+    for file_path in project_path.rglob("*"):
+        if file_path.is_file():
+            files.append(str(file_path.relative_to(project_path)))
+
+    return {
+        "session_id": session_id,
+        "project_name": project_name,
+        "files": files,
+    }
+
+@app.get("/session/{session_id}/projects")
+async def list_projects_in_session(session_id: str):
+    session_path = Path(f"./{SESSION_BASE_DIR}/{session_id}")
+    print(session_path.exists(),session_path.is_dir())
     if not session_path.exists() or not session_path.is_dir():
         raise HTTPException(status_code=404, detail="Session folder not found")
 
-    # Recursively list all files
-    files = [
-        str(p.relative_to(session_path))
-        for p in session_path.rglob("*")
-        if p.is_file()
+    project_names = [
+        project.name for project in session_path.iterdir() if project.is_dir()
     ]
-
-    return JSONResponse(content={"session_id": session_id, "files": files})
-
-
+    print(project_names)
+    return {
+        "session_id": session_id,
+        "projects": project_names
+    }
 
 @app.post("/test-code")
 async def test_code():
     stream = test_code_generate()
     return StreamingResponse(stream, media_type="text/event-stream")
 
+@app.get("/session/{session_id}/project/{project_name}/browser-runnable")
+async def get_browser_runnable_files(session_id: str, project_name: str):
+    project_path = Path(f"./{SESSION_BASE_DIR}/{session_id}/{project_name}")
+
+    if not project_path.exists() or not project_path.is_dir():
+        raise HTTPException(status_code=404, detail="Project folder not found")
+
+    # Check for index.html
+    index_html = project_path / "index.html"
+    if not index_html.exists():
+        return {"message": "❌ Project is not runnable on browser (missing index.html)"}
+
+    # Collect .html, .css, .js files
+    code_files = []
+    for root, _, files in os.walk(project_path):
+        for file in files:
+            if file.endswith((".html", ".css", ".js")):
+                file_path = os.path.join(root, file)
+                relative_path = os.path.relpath(file_path, project_path)
+                with open(file_path, "r", encoding="utf-8") as f:
+                    code = f.read()
+
+                code_files.append({
+                    "filepath": relative_path,
+                    "code": code
+                })
+
+    return {
+        "session_id": session_id,
+        "project_name": project_name,
+        "data": code_files
+    }
 
 @app.post("/delete-file")
 async def delete_file_from_session(data: DeleteFileRequest):
-    # session_folder = os.path.join(SESSION_BASE_DIR, data.session_id)
     session_folder = os.path.abspath(os.path.join(SESSION_BASE_DIR, data.session_id))
 
-    # Security check: file must be under the session folder
-    file_path = os.path.abspath(data.filepath)
-    if not file_path.startswith(os.path.abspath(session_folder)):
+    # Make file_path absolute
+    file_path = os.path.abspath(f"{SESSION_BASE_DIR}/{data.filepath}")
+
+    # Security check using commonpath to ensure file_path is inside session_folder
+    if os.path.commonpath([file_path, session_folder]) != session_folder:
         raise HTTPException(status_code=403, detail="Access to this file is not allowed.")
 
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found.")
 
     try:
-        # 🗑️ Delete the file
+        # Delete the file
         os.remove(file_path)
 
         parent_dir = os.path.dirname(file_path)
 
-        # 🔍 Check if parent directory is now empty
-        if os.path.abspath(parent_dir).startswith(session_folder) and len(os.listdir(parent_dir)) == 0:
+        # Check if parent directory is empty and inside session folder
+        if os.path.commonpath([parent_dir, session_folder]) == session_folder and len(os.listdir(parent_dir)) == 0:
             os.rmdir(parent_dir)
             return {
                 "message": f"✅ File deleted: {data.filepath}",
@@ -121,10 +172,10 @@ async def test_code_generate():
         f"data: {json.dumps(four)}\n\n",
         f"data: {json.dumps(five)}\n\n",
         f"data: {json.dumps(six)}\n\n",
-        f"data: {json.dumps(seven)}\n\n",
-        f"data: {json.dumps(eight)}\n\n",
-        f"data: {json.dumps(nine)}\n\n",
-        f"data: {json.dumps(ten)}\n\n",
+        # f"data: {json.dumps(seven)}\n\n",
+        # f"data: {json.dumps(eight)}\n\n",
+        # f"data: {json.dumps(nine)}\n\n",
+        # f"data: {json.dumps(ten)}\n\n",
         f"data: {json.dumps(eleven)}\n\n",
         f"data: {json.dumps(twelve)}\n\n",
     ]

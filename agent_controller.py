@@ -30,7 +30,10 @@ async def code_generator(prompt: str, session_id: str):
     print("working on redis")
     prev_msgs=""
     try:
-        prev_msgs = await r.get(session_key)
+        exist=await r.exists(session_key)
+        print("exist",exist)
+        if exist:
+            prev_msgs = await r.get(session_key)
     except redis.exceptions.ConnectionError as e:
         print("❌ Redis connection failed:", e)
     print("working on redis done")
@@ -44,7 +47,7 @@ async def code_generator(prompt: str, session_id: str):
         try:
             print("fetching response")
             response = client.chat.completions.create(
-                model="gpt-4.1-mini",
+                model="gpt-4o-mini",
                 response_format={"type": "json_object"},
                 messages=messages,
             )

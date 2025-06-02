@@ -12,7 +12,6 @@ r = redis.Redis(
   password=redis_pass,
   ssl=True
 )
-print(r.ping())
 # try:
 #     pong = r.ping()
 #     print("✅ Redis connected:", pong)
