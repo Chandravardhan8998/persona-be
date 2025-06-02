@@ -221,6 +221,27 @@ async def download_project_zip(session_id: str, project_name: str, background_ta
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"❌ Could not create zip: {str(e)}")
 
+@app.get("/file-code")
+async def get_code_by_filepath(filepath: str):
+    try:
+        path=f"{SESSION_BASE_DIR}/{filepath}"
+        print('path: ',path)
+        abs_path = Path(path).resolve()
+        # 🔐 Optional security check
+        if not abs_path.exists() or not abs_path.is_file():
+            raise HTTPException(status_code=404, detail="❌ File not found.")
+
+        # 📄 Read file content
+        with open(abs_path, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        return {
+            "filepath": str(abs_path),
+            "code": code
+        }
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail=f"❌ Failed to read file: {str(e)}")
 
 # async def code_generator(prompt: str, session_id: str):
 #     session_key = f"chat:{session_id}"
