@@ -1,18 +1,16 @@
 import asyncio
 import json
 from typing import List
-
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-
 from agent_controller import code_generator
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 import redis.asyncio as redis
-import os
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from models import PromptInput, DeleteFileRequest, SESSION_BASE_DIR
+import zipfile
+import os
 
 load_dotenv()
 app = FastAPI()
@@ -24,7 +22,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-
 )
 
 
@@ -186,9 +183,43 @@ async def test_code_generate():
 @app.post("/generate-code")
 async def generate_code(body:PromptInput):
     print("here")
-    stream = code_generator(body.prompt, body.session_id)
+    stream = code_generator(body.prompt, body.session_id,body.filename)
     return StreamingResponse(stream, media_type="text/event-stream")
 
+
+@app.get("/download-zip/{session_id}/{project_name}")
+async def download_project_zip(session_id: str, project_name: str, background_tasks: BackgroundTasks):
+    base_path = Path(f"./{SESSION_BASE_DIR}/{session_id}/{project_name}").resolve()
+
+    if not base_path.exists() or not base_path.is_dir():
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    zip_filename = f"{project_name}.zip"
+    zip_path = Path(f"./temp_zips/{session_id}_{zip_filename}").resolve()
+
+    # Create temp_zips folder if it doesn't exist
+    zip_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        # Create ZIP archive
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(base_path):
+                for file in files:
+                    file_path = Path(root) / file
+                    arcname = file_path.relative_to(base_path.parent)
+                    zipf.write(file_path, arcname)
+
+        # 🧹 Cleanup zip after response is sent
+        background_tasks.add_task(os.remove, zip_path)
+
+        return FileResponse(
+            path=zip_path,
+            filename=zip_filename,
+            media_type='application/zip',
+            background=background_tasks
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"❌ Could not create zip: {str(e)}")
 
 
 # async def code_generator(prompt: str, session_id: str):
