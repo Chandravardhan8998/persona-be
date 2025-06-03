@@ -6,6 +6,7 @@ class PromptInput(BaseModel):
     prompt: str
     session_id: str | None = None  # Optional (for new user)
     filename:str
+    continuingInteraction:bool
 
 
 class CommandType(Enum):

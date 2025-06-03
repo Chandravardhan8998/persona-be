@@ -5,7 +5,7 @@ from openai import OpenAI
 from agent_tools import (run_command, generate_cmd,
                          )
 import asyncio
-from models import GenerateCMD, CommandType, SESSION_BASE_DIR
+from models import GenerateCMD, CommandType, SESSION_BASE_DIR, PromptInput
 from prompts import CODE_AGENT_SYSTEM_PROMPT
 from redis_config import r
 import json
@@ -30,15 +30,15 @@ def to_snake_case(name: str) -> str:
     name = re.sub(r'[\W_]+', '_', name)
     return name.lower()
 
-async def code_generator(prompt: str, session_id: str, filename: str):
+async def code_generator(body:PromptInput):
     # Convert filename to snake_case for folder/redis key
-    safe_filename = to_snake_case(filename)
-    redis_key = f"chat:{session_id}/{safe_filename}"
+    safe_filename = to_snake_case(body.filename)
+    redis_key = f"chat:{body.session_id}/{safe_filename}"
 
     print("🔑 Using Redis key:", redis_key)
 
     # Create session project folder if doesn't exist
-    project_path = Path(f"./{SESSION_BASE_DIR}/{session_id}/{safe_filename}")
+    project_path = Path(f"./{SESSION_BASE_DIR}/{body.session_id}/{safe_filename}")
     project_path.mkdir(parents=True, exist_ok=True)
 
     # Fetch previous messages if any
@@ -51,10 +51,11 @@ async def code_generator(prompt: str, session_id: str, filename: str):
         print("❌ Redis connection failed:", e)
 
     messages = json.loads(prev_msgs) if prev_msgs else []
-
-    messages.append({"role": "system", "content": CODE_AGENT_SYSTEM_PROMPT})
-    messages.append({"role": "user", "content": f"{prompt} where app and folder name is strictly {safe_filename}"})
-
+    if len(messages)==0:
+        messages.append({"role": "system", "content": CODE_AGENT_SYSTEM_PROMPT})
+    if not body.continuingInteraction:
+         messages.append({"role": "user", "content": f"{body.prompt} where app and folder name is strictly {safe_filename}"})
+    print(messages)
     while True:
         try:
             response = client.chat.completions.create(
@@ -63,6 +64,8 @@ async def code_generator(prompt: str, session_id: str, filename: str):
                 messages=messages,
             )
             msg = response.choices[0].message.content
+            parsed = json.loads(msg)
+            step = parsed.get("step")
             messages.append({"role": "assistant", "content": msg})
 
             try:
@@ -70,22 +73,23 @@ async def code_generator(prompt: str, session_id: str, filename: str):
             except redis.exceptions.ConnectionError as e:
                 print("❌ Redis connection failed:", e)
 
-            parsed = json.loads(msg)
-            step = parsed.get("step")
-
+            # if step == "review":
+            #     json_data={}
+            #     yield f"data: {json.dumps(json_data)}\n\n"
+            #     await asyncio.sleep(0.01)
             if step != "generate":
                 yield f"data: {json.dumps(parsed)}\n\n"
                 await asyncio.sleep(0.01)
+
             elif step == "generate":
                 tool = parsed["function"]
                 tool_input = parsed["input"]
-
                 if tool == "run_command":
                     if tool_input["type"] in ["CREATE", "EDIT", "MODIFY"]:
                         data = GenerateCMD(
                             filename=tool_input["filename"],
                             content=tool_input["content"],
-                            session_id=session_id,
+                            session_id=body.session_id,
                             command_type=CommandType.CREATE
                         )
                         cmd = generate_cmd(data)
@@ -114,7 +118,7 @@ async def code_generator(prompt: str, session_id: str, filename: str):
                 except redis.exceptions.ConnectionError as e:
                     print("❌ Redis connection failed:", e)
 
-            if step == "review":
+            if step == "review" or step=="user-interaction":
                 break
         except Exception as e:
             print("❌ Error:", e)

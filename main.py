@@ -3,18 +3,18 @@ import json
 from typing import List
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-from agent_controller import code_generator
+from agent_controller import code_generator, to_snake_case
 from fastapi.responses import StreamingResponse, FileResponse
 import redis.asyncio as redis
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from models import PromptInput, DeleteFileRequest, SESSION_BASE_DIR
+from redis_config import r
 import zipfile
 import os
 
 load_dotenv()
 app = FastAPI()
-r = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
 
 app.add_middleware(
     CORSMiddleware,
@@ -162,28 +162,74 @@ async def test_code_generate():
            "content": "All files for the basic React TypeScript Todo app have been generated and organized."}
     twelve={"step": "review",
            "content": "The React TypeScript Todo app code is clean, modular, and uses proper typing. Basic styling is applied via CSS with clear class names."}
+    analyze={
+    "step": "analyse",
+    "content": "User wants to generate a simple Todo app using vanilla HTML, CSS, and JavaScript. The app and folder should be named 'new_app'.",
+    
+}
+    plan={
+    "step": "plan",
+    "content": "I need to create the following minimal files for the Todo app under the 'new_app' directory:\n\n/new_app/\n├── index.html\n├── style.css\n└── script.js\n\nThis structure will keep the app simple and organized.",
+}
+    user_interaction={
+    "step": "user-interaction",
+    "content": "Do you want to save the todos in browser's localStorage so they're not lost on refresh?",
+    "response_suggestions": [
+        "Yes, use localStorage",
+        "No, just keep in memory"
+    ],
+}
+
     data=[
-        f"data: {json.dumps(one)}\n\n",
-        f"data: {json.dumps(two)}\n\n",
-        f"data: {json.dumps(three)}\n\n",
-        f"data: {json.dumps(four)}\n\n",
-        f"data: {json.dumps(five)}\n\n",
-        f"data: {json.dumps(six)}\n\n",
-        # f"data: {json.dumps(seven)}\n\n",
-        # f"data: {json.dumps(eight)}\n\n",
-        # f"data: {json.dumps(nine)}\n\n",
-        # f"data: {json.dumps(ten)}\n\n",
-        f"data: {json.dumps(eleven)}\n\n",
-        f"data: {json.dumps(twelve)}\n\n",
+        f"data: {json.dumps(analyze)}\n\n",
+        f"data: {json.dumps(plan)}\n\n",
+        f"data: {json.dumps(user_interaction)}\n\n",
+        # f"data: {json.dumps(two)}\n\n",
+        # f"data: {json.dumps(three)}\n\n",
+        # f"data: {json.dumps(four)}\n\n",
+        # f"data: {json.dumps(five)}\n\n",
+        # f"data: {json.dumps(six)}\n\n",
+        # # f"data: {json.dumps(seven)}\n\n",
+        # # f"data: {json.dumps(eight)}\n\n",
+        # # f"data: {json.dumps(nine)}\n\n",
+        # # f"data: {json.dumps(ten)}\n\n",
+        # f"data: {json.dumps(eleven)}\n\n",
+        # f"data: {json.dumps(twelve)}\n\n",
     ]
     for item in data:
         await asyncio.sleep(2)
         yield item
 
+@app.post("/human-feedback")
+async def human_feedback(session:str,filename:str,response:str):
+    safe_filename = to_snake_case(filename)
+    redis_key = f"chat:{session}/{safe_filename}"
+    prev_msgs=""
+    try:
+        exist = await r.exists(redis_key)
+        print('exist ',exist)
+        if exist:
+            prev_msgs = await r.get(redis_key)
+    except redis.exceptions.ConnectionError as e:
+        print("❌ Redis connection failed:", e)
+    messages = json.loads(prev_msgs) if prev_msgs else []
+    print('response from user ',response)
+    print(messages)
+    user_response={ "step": "user-response", "content": response }
+    messages.append({"role":"assistant","content":json.dumps(user_response)})
+    messages.append({"role":"user","content":response})
+    print('updated messages')
+    print(messages)
+
+    try:
+        await r.set(redis_key, json.dumps(messages), ex=3600)
+    except redis.exceptions.ConnectionError as e:
+        print("❌ Redis connection failed:", e)
+    return user_response
+
 @app.post("/generate-code")
 async def generate_code(body:PromptInput):
-    print("here")
-    stream = code_generator(body.prompt, body.session_id,body.filename)
+    stream = code_generator(body)
     return StreamingResponse(stream, media_type="text/event-stream")
 
 
