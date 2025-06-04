@@ -26,4 +26,7 @@ class DeleteFileRequest(BaseModel):
     session_id: str
     filepath: str  # full relative path of the file (e.g. "user_sessions/[session_id]/filename.tsx")
 
+class FilePathInput(BaseModel):
+    filepath: str
+
 SESSION_BASE_DIR = "user_sessions"

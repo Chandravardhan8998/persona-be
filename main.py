@@ -3,12 +3,12 @@ import json
 from typing import List
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-from agent_controller import code_generator, to_snake_case
+from agent_controller import code_generator, to_snake_case, detect_project_type
 from fastapi.responses import StreamingResponse, FileResponse
 import redis.asyncio as redis
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, BackgroundTasks
-from models import PromptInput, DeleteFileRequest, SESSION_BASE_DIR
+from models import PromptInput, DeleteFileRequest, SESSION_BASE_DIR, FilePathInput
 from redis_config import r
 import zipfile
 import os
@@ -65,6 +65,7 @@ async def test_code():
     stream = test_code_generate()
     return StreamingResponse(stream, media_type="text/event-stream")
 
+
 @app.get("/session/{session_id}/project/{project_name}/browser-runnable")
 async def get_browser_runnable_files(session_id: str, project_name: str):
     project_path = Path(f"./{SESSION_BASE_DIR}/{session_id}/{project_name}")
@@ -72,30 +73,42 @@ async def get_browser_runnable_files(session_id: str, project_name: str):
     if not project_path.exists() or not project_path.is_dir():
         raise HTTPException(status_code=404, detail="Project folder not found")
 
-    # Check for index.html
-    index_html = project_path / "index.html"
-    if not index_html.exists():
-        return {"message": "❌ Project is not runnable on browser (missing index.html)"}
+    project_type = detect_project_type(project_path)
 
-    # Collect .html, .css, .js files
+    # If not supported, return message only
+    print("project_type")
+    print(project_type)
+    if project_type not in ["REACT", "HTML","React","html"]:
+        return {
+            "message": "❌ Project is not runnable on browser",
+            "project_type": project_type,
+            "files": [],
+            "isSuccess":False
+        }
+
+    # Collect all relevant files (.html, .css, .js, .jsx, .ts, .tsx, .json)
     code_files = []
     for root, _, files in os.walk(project_path):
         for file in files:
-            if file.endswith((".html", ".css", ".js")):
+            # if file.endswith((".html", ".css", ".js", ".jsx", ".ts", ".tsx", ".json"))
+              if True:
                 file_path = os.path.join(root, file)
                 relative_path = os.path.relpath(file_path, project_path)
-                with open(file_path, "r", encoding="utf-8") as f:
-                    code = f.read()
-
-                code_files.append({
-                    "filepath": relative_path,
-                    "code": code
-                })
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        code = f.read()
+                    code_files.append({
+                        "filepath": relative_path,
+                        "code": code
+                    })
+                except Exception:
+                    pass  # skip unreadable files
 
     return {
-        "session_id": session_id,
-        "project_name": project_name,
-        "data": code_files
+        "message": "✅ Project is browser runnable",
+        "project_type": project_type,
+        "files": code_files,
+        "isSuccess": True
     }
 
 @app.post("/delete-file")
@@ -266,6 +279,15 @@ async def download_project_zip(session_id: str, project_name: str, background_ta
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"❌ Could not create zip: {str(e)}")
+
+# @app.post("/detect-project")
+# async def detect_project(request: FilePathInput):
+#     path = request.filepath
+#     if not os.path.isdir(f"{SESSION_BASE_DIR}/{path}"):
+#         raise HTTPException(status_code=404, detail="Path not found or invalid.")
+#
+#     project_type = detect_project_type(path)
+#     return {"project_type": project_type}
 
 @app.get("/file-code")
 async def get_code_by_filepath(filepath: str):

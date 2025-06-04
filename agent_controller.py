@@ -37,10 +37,6 @@ async def code_generator(body:PromptInput):
 
     print("🔑 Using Redis key:", redis_key)
 
-    # Create session project folder if doesn't exist
-    project_path = Path(f"./{SESSION_BASE_DIR}/{body.session_id}/{safe_filename}")
-    project_path.mkdir(parents=True, exist_ok=True)
-
     # Fetch previous messages if any
     prev_msgs = ""
     try:
@@ -82,6 +78,10 @@ async def code_generator(body:PromptInput):
                 await asyncio.sleep(0.01)
 
             elif step == "generate":
+                # Create session project folder if doesn't exist
+                project_path = Path(f"./{SESSION_BASE_DIR}/{body.session_id}/{safe_filename}")
+                project_path.mkdir(parents=True, exist_ok=True)
+
                 tool = parsed["function"]
                 tool_input = parsed["input"]
                 if tool == "run_command":
@@ -127,6 +127,25 @@ async def code_generator(body:PromptInput):
             break
 
     print("✅ Code generation session finished")
+
+def detect_project_type(project_path: Path) -> str:
+    package_json = project_path / "package.json"
+    if package_json.exists():
+        try:
+            with open(package_json, "r") as f:
+                data = json.load(f)
+                deps = data.get("dependencies", {})
+                if "react" in deps or "react-dom" in deps:
+                    return "REACT"
+        except Exception:
+            pass
+
+    html_files = list(project_path.glob("*.html"))
+    if html_files:
+        return "HTML"
+
+    return "UNKNOWN"
+
 # async def code_generator(prompt: str, session_id: str):
 #     print("here")
 #     session_key = f"chat:{session_id}"
