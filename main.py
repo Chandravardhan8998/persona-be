@@ -1,5 +1,6 @@
 import asyncio
 import json
+import shutil
 from typing import List
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,9 +8,11 @@ from agent_controller import code_generator, to_snake_case, detect_project_type
 from fastapi.responses import StreamingResponse, FileResponse
 import redis.asyncio as redis
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import File, FastAPI, HTTPException, BackgroundTasks, UploadFile
 from models import PromptInput, DeleteFileRequest, SESSION_BASE_DIR, FilePathInput
 from redis_config import r
+from scrapper import get_paths,get_content
+from rag import get_rag_response, get_embedd_doc
 import zipfile
 import os
 
@@ -65,6 +68,42 @@ async def test_code():
     stream = test_code_generate()
     return StreamingResponse(stream, media_type="text/event-stream")
 
+@app.post("/embedd-doc")
+async def embedd_doc(file:UploadFile=File(...)):
+    Path("uploads").mkdir(parents=True, exist_ok=True)
+    temp_path = Path("./uploads") / file.filename
+    with open(temp_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    res=await get_embedd_doc(temp_path)
+    if temp_path.exists():
+        temp_path.unlink()  # ✅ deletes the file
+        print(f"Deleted: {temp_path}")
+    return res
+
+@app.post("/generate-rag")
+async def generate_rag(query:str):
+    message= await get_rag_response(query)
+    return {"message":message,"isSuccess":True}
+
+# from qdrant_client import QdrantClient
+#
+# qdrant_client = QdrantClient(
+#     url="https://2b110d73-ce48-41d3-aff5-f9beb041b16b.eu-west-2-0.aws.cloud.qdrant.io:6333",
+#     api_key="B54jmjyrhm0EFf1YDnq8tJPFNLpl64bAr4egNI7cSxG6Uj4GttTO_Q",
+# )
+#
+# print(qdrant_client.get_collections())
+
+@app.get("/get_blog_paths")
+async def get_blog_paths():
+    res=await  get_paths()
+
+    return res
+
+@app.post("/get_blog_content")
+async def get_blog_content(url:str):
+    res=await get_content(url)
+    return {"content":res}
 
 @app.get("/session/{session_id}/project/{project_name}/browser-runnable")
 async def get_browser_runnable_files(session_id: str, project_name: str):
@@ -145,6 +184,8 @@ async def delete_file_from_session(data: DeleteFileRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"❌ Error deleting file: {str(e)}")
+
+
 
 async def test_code_generate():
     one={"step": "analyse", "content": "User wants a basic Todo app built using React and TypeScript. The app should allow adding, listing, and deleting todos. No backend or advanced features specified."}
