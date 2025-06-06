@@ -5,10 +5,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_qdrant import QdrantVectorStore
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from openai.types import ResponseFormatJSONSchema
-from openai.types.chat import ChatCompletionFunctionMessageParam, ChatCompletionToolMessageParam, \
-    ChatCompletionAssistantMessageParam, ChatCompletionUserMessageParam, ChatCompletionSystemMessageParam, \
-    ChatCompletionDeveloperMessageParam
+from openai.types.chat import ChatCompletionUserMessageParam, ChatCompletionSystemMessageParam
 from qdrant_client import QdrantClient, models
 from openai import OpenAI
 import os
