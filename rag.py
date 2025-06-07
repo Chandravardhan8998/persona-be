@@ -172,6 +172,7 @@ async def get_blog_rag_response(query:str,collection_name:str):
         and for linked add text Click Here to know more and make sure this link should be ina separate line
         make link text bold italic and make it stand out
         link should open in new tabs
+        if there are multiple links and steps in context add them with there info
         Context:
         {context}
     """
