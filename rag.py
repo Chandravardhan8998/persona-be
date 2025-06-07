@@ -1,5 +1,4 @@
 from typing import Iterable
-
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_qdrant import QdrantVectorStore
