@@ -104,8 +104,14 @@ async def get_rag_response(query:str,collection_name:str):
     )
     print("search_results ",search_results)
 
-    context = "\n\n\n".join([ f"Page Content: {result.page_content}\nPage Number: {result.metadata['page_label']}\nFile Location: {result.metadata['source']}"
-                                for result in search_results])
+    # context = "\n\n\n".join([ f"Page Content: {result.page_content}\nPage Number: {result.metadata['page_label']}\nFile Location: {result.metadata['source']}"
+    #                             for result in search_results])
+    lines = []
+    for result in search_results:
+        line = f"Page Content: {result.page_content}\nblog url: {result.metadata['source']}\n"
+        lines.append(line)
+
+    context = "\n\n\n".join(lines)
 
     SYSTEM_PROMPT = f"""
         You are a helpful AI Assistant who answers user query based on the available context
@@ -149,7 +155,7 @@ async def get_blog_rag_response(query:str,collection_name:str):
     )
     print("search_results ",search_results)
 
-    context = "\n\n\n".join([ f"Page Content: {result.page_content}\nblog url: {result.metadata["source"]}\n"
+    context = "\n\n\n".join([f"Page Content: {result.page_content}\nblog url: {result.metadata["source"]}\n"
                                 for result in search_results])
 
     SYSTEM_PROMPT = f"""
