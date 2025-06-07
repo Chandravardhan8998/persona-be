@@ -9,12 +9,16 @@ from fastapi.responses import StreamingResponse, FileResponse
 import redis.asyncio as redis
 from pathlib import Path
 from fastapi import File, FastAPI, HTTPException, BackgroundTasks, UploadFile
-from models import PromptInput, DeleteFileRequest, SESSION_BASE_DIR, FilePathInput
+from models import PromptInput, DeleteFileRequest, SESSION_BASE_DIR, FilePathInput, GetBlogSubContent
 from redis_config import r
-from scrapper import get_paths,get_content
-from rag import get_rag_response, get_embedd_doc
+from scrapper import get_paths, get_content, chai_doc_collection
+from rag import get_rag_response, get_embedd_doc, embedd_vector_db, manage_collection_building, rag_collection, \
+    get_blog_rag_response
 import zipfile
 import os
+from langchain.schema import Document
+
+
 
 load_dotenv()
 app = FastAPI()
@@ -82,17 +86,9 @@ async def embedd_doc(file:UploadFile=File(...)):
 
 @app.post("/generate-rag")
 async def generate_rag(query:str):
-    message= await get_rag_response(query)
+    message= await get_rag_response(query,collection_name=rag_collection)
     return {"message":message,"isSuccess":True}
 
-# from qdrant_client import QdrantClient
-#
-# qdrant_client = QdrantClient(
-#     url="https://2b110d73-ce48-41d3-aff5-f9beb041b16b.eu-west-2-0.aws.cloud.qdrant.io:6333",
-#     api_key="B54jmjyrhm0EFf1YDnq8tJPFNLpl64bAr4egNI7cSxG6Uj4GttTO_Q",
-# )
-#
-# print(qdrant_client.get_collections())
 
 @app.get("/get_blog_paths")
 async def get_blog_paths():
@@ -100,10 +96,48 @@ async def get_blog_paths():
 
     return res
 
-@app.post("/get_blog_content")
-async def get_blog_content(url:str):
-    res=await get_content(url)
-    return {"content":res}
+@app.post("/embed_blog_content")
+async def embed_blog_content(req:GetBlogSubContent):
+
+    # split text doc
+    data: list[dict[str, str]] = []
+
+    for sub_path in req.paths:
+        path=f"{req.path}/{sub_path}"
+        text=await get_content(path)
+        data.append({"text":f"blog-path:{path} blog-subject:{sub_path} content: {text}","path":f"https://chaidocs.vercel.app/youtube/{path}"})
+    # print(data)
+    split_text=[]
+    for blog in data:
+        print(blog)
+        split_text.append(Document(page_content=blog.get("text"),metadata={"source": blog.get("path")}))
+    print(split_text)
+    if len(split_text)==0:
+        return {"isSuccess":False,"message":"Splitting text failed."}
+    # split tet doc end
+
+    # manage collection start
+    print("start")
+    collection_name=f"{chai_doc_collection}_{req.path}"
+    collection_exist= await manage_collection_building(collection_name)
+    print("collection_exist ",collection_exist)
+    if not collection_exist:
+        return {"isSuccess":False,"message":"Something wrong with collection."}
+    # manage collection end
+
+    # embed start
+    vector_db = embedd_vector_db(split_text,collection_name=collection_name)
+    if not vector_db:
+        return {"isSuccess":False,"message":"Embedding failed."}
+    print("vector_db ", vector_db)
+    # embed end
+    return {"isSuccess": True, "message": "Embedded successfully."}
+
+@app.post("/get-blog-rag")
+async def generate_blog_rag(query:str,path:str):
+    collection_name = f"{chai_doc_collection}_{path}"
+    message= await get_blog_rag_response(query,collection_name=collection_name)
+    return {"message":message,"isSuccess":True}
 
 @app.get("/session/{session_id}/project/{project_name}/browser-runnable")
 async def get_browser_runnable_files(session_id: str, project_name: str):
@@ -321,14 +355,6 @@ async def download_project_zip(session_id: str, project_name: str, background_ta
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"❌ Could not create zip: {str(e)}")
 
-# @app.post("/detect-project")
-# async def detect_project(request: FilePathInput):
-#     path = request.filepath
-#     if not os.path.isdir(f"{SESSION_BASE_DIR}/{path}"):
-#         raise HTTPException(status_code=404, detail="Path not found or invalid.")
-#
-#     project_type = detect_project_type(path)
-#     return {"project_type": project_type}
 
 @app.get("/file-code")
 async def get_code_by_filepath(filepath: str):
@@ -352,76 +378,6 @@ async def get_code_by_filepath(filepath: str):
         print(e)
         raise HTTPException(status_code=500, detail=f"❌ Failed to read file: {str(e)}")
 
-# async def code_generator(prompt: str, session_id: str):
-#     session_key = f"chat:{session_id}"
-#     prev_msgs = await r.get(session_key)
-#     messages = json.loads(prev_msgs) if prev_msgs else []
-#
-#     if not prev_msgs:
-#         messages.append({"role": "system", "content": CODE_AGENT_SYSTEM_PROMPT})
-#
-#     client = OpenAI()
-#     messages.append({"role": "user", "content": prompt})
-#
-#     while True:
-#         response = client.chat.completions.create(
-#             model="gpt-4.1-mini",
-#             messages=messages,
-#             response_format={'type': "json_object"}
-#         )
-#
-#         content = response.choices[0].message.content
-#         messages.append({"role": "assistant", "content": content})
-#
-#         parsed_response = json.loads(content)
-#
-#         if parsed_response.get("step") == "action":
-#             tool_name = parsed_response.get("function")
-#             tool_input = parsed_response.get("input")
-#
-#             if available_tools.get(tool_name):
-#                 output = available_tools[tool_name](tool_input)
-#                 messages.append({
-#                     "role": "user",
-#                     "content": json.dumps({"step": "observe", "output": output})
-#                 })
-#                 yield f"data: {json.dumps(parsed_response)}\n\n"
-#                 continue
-#
-#         if parsed_response.get("step") == "output":
-#             yield f"data: {json.dumps(parsed_response)}\n\n"
-#             break
-#
-#     # ✅ Store updated messages back to Redis
-#     await r.set(session_key, json.dumps(messages), ex=36000)
-
-
-# @app.post("/generate")
-# async def generate_text(query: PromptInput):
-#     prompt = query.prompt
-#     return StreamingResponse(event_generator(prompt),   media_type="text/event-stream")
-#
-# def event_generator(prompt: str):
-#     client = OpenAI()
-#     messages = [
-#         {"role": "system", "content": SYSTEM_PROMPT},
-#         {"role": "user", "content": prompt}
-#     ]
-#     while True:
-#         response = client.chat.completions.create(
-#             model="gpt-4.1-mini",
-#             messages=messages,
-#             response_format={'type': "json_object"},
-#             stream=False
-#         )
-#         content = response.choices[0].message.content
-#         messages.append({"role": "assistant", "content": content})
-#         parsed_response = json.loads(content)
-#
-#         yield f"data: {json.dumps(parsed_response)}\n\n"
-#
-#         if parsed_response.get("step") == "result":
-#             break
 
 
 

@@ -29,4 +29,8 @@ class DeleteFileRequest(BaseModel):
 class FilePathInput(BaseModel):
     filepath: str
 
+class GetBlogSubContent(BaseModel):
+    path: str
+    paths:list[str]
+
 SESSION_BASE_DIR = "user_sessions"

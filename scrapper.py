@@ -3,11 +3,15 @@ import json
 import requests
 from bs4 import BeautifulSoup
 
+chai_doc_collection="chai_doc_documents"
+
 async def get_html(path:str):
     # url = 'https://chaidocs.vercel.app/youtube/getting-started/'
     url = path
+
     response = requests.get(url)
     if response.status_code != 200:
+        print(url)
         raise Exception('Network response was not ok')
 
     html = response.text
@@ -15,7 +19,10 @@ async def get_html(path:str):
     return soup
 
 async def get_content(path:str):
-    soup=await get_html(f"https://chaidocs.vercel.app/youtube/{path}")
+    url=f"https://chaidocs.vercel.app/youtube/{path}"
+    print(url)
+    soup=await get_html(url)
+
     contents = soup.find_all("main")
     print(contents)
     text_data=""
