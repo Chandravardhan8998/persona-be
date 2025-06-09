@@ -317,8 +317,10 @@ async def human_feedback(session:str,filename:str,response:str):
 
 @app.post("/generate-code")
 async def generate_code(body:PromptInput):
-    stream = code_generator(body)
+    stream = test_code_generate()
     return StreamingResponse(stream, media_type="text/event-stream")
+    # stream = code_generator(body)
+    # return StreamingResponse(stream, media_type="text/event-stream")
 
 
 @app.get("/download-zip/{session_id}/{project_name}")
